@@ -12,7 +12,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-# Config 
+# Config
 st.set_page_config(
     page_title="BurgerPT Dashboard",
     page_icon="🍔",
@@ -46,7 +46,7 @@ def load_models():
 df = load_data()
 rev_model, dish_model = load_models()
 
-# Sidebar - navegação 
+# Sidebar - navegação
 with st.sidebar:
     st.title("BurguerPT")
     st.markdown("---")
@@ -63,7 +63,7 @@ with st.sidebar:
 if page == "Dashboard Geral":
     st.title("Dashboard Geral do Franchise")
 
-    # KPIs 
+    # KPIs
     col1, col2, col3, col4 = st.columns(4)
     total_rev   = df["revenue"].sum()
     avg_monthly = df.groupby("date")["revenue"].sum().mean()
@@ -77,7 +77,7 @@ if page == "Dashboard Geral":
 
     st.divider()
 
-    # Receita total mensal do franchise 
+    # Receita total mensal do franchise
     col_a, col_b = st.columns([2, 1])
 
     with col_a:
@@ -92,7 +92,7 @@ if page == "Dashboard Geral":
         ax.set_xlabel("")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
     with col_b:
@@ -104,12 +104,12 @@ if page == "Dashboard Geral":
         ax.set_xlabel("Receita (k€)")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
     st.divider()
 
-    # Top 5 restaurantes + Sazonalidade 
+    # Top 5 restaurantes + Sazonalidade
     col_c, col_d = st.columns(2)
 
     with col_c:
@@ -123,7 +123,7 @@ if page == "Dashboard Geral":
         rank["revenue_fmt"] = rank["revenue"].apply(lambda x: f"{x/1000:.1f}k€")
         rank.index = rank.index + 1
         rank.columns = ["Restaurante", "Receita Total (€)", "Receita"]
-        st.dataframe(rank[["Restaurante", "Receita"]], use_container_width=True, height=380)
+        st.dataframe(rank[["Restaurante", "Receita"]], width='stretch', height=380)
 
     with col_d:
         st.subheader("Sazonalidade — Receita por Mês")
@@ -137,12 +137,12 @@ if page == "Dashboard Geral":
         ax.set_ylabel("Receita Média (€)")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
     st.divider()
 
-    # Pratos mais vendidos 
+    # Pratos mais vendidos
     st.subheader("Vendas por Prato — Total Franchise")
     dish_cols = {d: f"units_{d.replace(' ','_')}" for d in DISHES}
     dish_totals = {d: df[col].sum() for d, col in dish_cols.items()}
@@ -152,7 +152,7 @@ if page == "Dashboard Geral":
     with col_e:
         dish_df["% Total"] = (dish_df["Unidades"] / dish_df["Unidades"].sum() * 100).round(1).astype(str) + "%"
         st.dataframe(dish_df[["Prato","Unidades","% Total"]].reset_index(drop=True),
-                     use_container_width=True, hide_index=True)
+                     width='stretch', hide_index=True)
 
     with col_f:
         fig, ax = plt.subplots(figsize=(7, 3))
@@ -161,7 +161,7 @@ if page == "Dashboard Geral":
         ax.set_xlabel("Unidades Vendidas")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
 # PÁGINA 2 — Análise por Restaurante
@@ -193,7 +193,7 @@ elif page == "Análise por Restaurante":
         ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:,.0f}€"))
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
     with col_b:
@@ -207,7 +207,7 @@ elif page == "Análise por Restaurante":
         ax.pie(values, labels=labels, autopct="%1.0f%%",
                colors=["#E76F51", "#E9C46A", "#2A9D8F"],
                wedgeprops={"edgecolor": "white", "linewidth": 1.5})
-        st.pyplot(fig, use_container_width=True)
+        st.pyplot(fig, width='stretch')
         plt.close()
 
     st.divider()
@@ -223,7 +223,7 @@ elif page == "Análise por Restaurante":
     ax.legend(fontsize=8, ncol=3, loc="upper left")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    st.pyplot(fig, use_container_width=True)
+    st.pyplot(fig, width='stretch')
     plt.close()
 
     st.divider()
@@ -248,7 +248,7 @@ elif page == "Análise por Restaurante":
             "Franchise":   f"{franchise_val:.2f}{unit}",
             "Diferença":   f"{'▲' if delta > 0 else '▼'} {abs(delta):.2f}{unit}",
         })
-    st.dataframe(pd.DataFrame(comp_data), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(comp_data), width='stretch', hide_index=True)
 
     # Onde investir
     st.subheader("Onde Investir")
@@ -312,11 +312,11 @@ elif page == "Previsões":
             hist = rdf.tail(4)[["date","revenue","total_units_sold","avg_rating"]].copy()
             hist.columns = ["Mês", "Receita (€)", "Unidades", "Rating"]
             hist["Receita (€)"] = hist["Receita (€)"].apply(lambda x: f"{x:,.0f}€")
-            st.dataframe(hist.reset_index(drop=True), use_container_width=True, hide_index=True)
+            st.dataframe(hist.reset_index(drop=True), width='stretch', hide_index=True)
 
         st.divider()
 
-        if st.button("Gerar Previsão", type="primary", use_container_width=True):
+        if st.button("Gerar Previsão", type="primary", width='stretch'):
 
             input_row = {
                 "revenue_lag1":     lag1["revenue"],
@@ -392,7 +392,7 @@ elif page == "Previsões":
                 ax.set_xlabel("Probabilidade (%)")
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
-                st.pyplot(fig, use_container_width=True)
+                st.pyplot(fig, width='stretch')
                 plt.close()
 
             # Recomendações baseadas na previsão
@@ -413,6 +413,6 @@ elif page == "Previsões":
             for r in recs:
                 st.markdown(f"- {r}")
 
-# Footer 
+# Footer
 st.sidebar.markdown("---")
 st.sidebar.caption("L.EIC IA G05 POC — Dados sintéticos")
