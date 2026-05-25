@@ -24,13 +24,40 @@ from xgboost import XGBRegressor, XGBClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.model_selection import cross_val_score, KFold, StratifiedKFold
+from sklearn.model_selection import RandomizedSearchCV, KFold, StratifiedKFold, ParameterGrid
 from sklearn.metrics import (
     mean_absolute_error, r2_score,
     accuracy_score, f1_score, classification_report
 )
 
 plt.rcParams.update({"axes.spines.top": False, "axes.spines.right": False, "figure.dpi": 130})
+
+RANDOM_STATE = 42
+N_ITER_SEARCH = 20
+
+
+def tune_model(name, pipe, param_grid, X_train, y_train, cv, scoring):
+    """
+    Otimiza hiperparâmetros com RandomizedSearchCV.
+    Se a grelha for pequena, testa todas as combinações disponíveis.
+    """
+    total_candidates = len(ParameterGrid(param_grid))
+    n_iter = min(N_ITER_SEARCH, total_candidates)
+
+    search = RandomizedSearchCV(
+        estimator=pipe,
+        param_distributions=param_grid,
+        n_iter=n_iter,
+        scoring=scoring,
+        cv=cv,
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
+        refit=True,
+    )
+    search.fit(X_train, y_train)
+
+    print(f"[{name}] melhores hiperparâmetros: {search.best_params_}")
+    return search.best_estimator_, search.best_score_, search.best_params_
 
 # Carregar dados
 df = pd.read_csv("data/franchise_monthly.csv")
@@ -132,29 +159,52 @@ print("="*55)
 
 reg_models = {
     "Ridge":         Pipeline([("pre", preprocessor), ("m", Ridge())]),
-    "Random Forest": Pipeline([("pre", preprocessor), ("m", RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1))]),
-    "XGBoost":       Pipeline([("pre", preprocessor), ("m", XGBRegressor(n_estimators=300, learning_rate=0.05, max_depth=5, random_state=42, verbosity=0))]),
+    "Random Forest": Pipeline([("pre", preprocessor), ("m", RandomForestRegressor(random_state=RANDOM_STATE, n_jobs=-1))]),
+    "XGBoost":       Pipeline([("pre", preprocessor), ("m", XGBRegressor(random_state=RANDOM_STATE, verbosity=0, n_jobs=-1))]),
+}
+
+reg_param_grids = {
+    "Ridge": {
+        "m__alpha": [0.1, 1.0, 5.0, 10.0, 25.0, 50.0, 100.0],
+    },
+    "Random Forest": {
+        "m__n_estimators": [150, 250, 400],
+        "m__max_depth": [None, 8, 12, 18],
+        "m__min_samples_split": [2, 5, 10],
+        "m__min_samples_leaf": [1, 2, 4],
+        "m__max_features": ["sqrt", 0.7, 1.0],
+    },
+    "XGBoost": {
+        "m__n_estimators": [150, 300, 500],
+        "m__learning_rate": [0.03, 0.05, 0.08, 0.1],
+        "m__max_depth": [3, 4, 5, 6],
+        "m__subsample": [0.75, 0.9, 1.0],
+        "m__colsample_bytree": [0.75, 0.9, 1.0],
+        "m__reg_lambda": [1.0, 3.0, 5.0],
+    },
 }
 
 cv_reg = KFold(n_splits=5, shuffle=True, random_state=42)
 reg_results = {}
 
 for name, pipe in reg_models.items():
-    scores = cross_val_score(pipe, X_train, y_rev_train, cv=cv_reg,
-                             scoring="neg_mean_absolute_error")
-    mae_cv = -scores.mean()
-    pipe.fit(X_train, y_rev_train)
+    pipe, best_score, best_params = tune_model(
+        name, pipe, reg_param_grids[name], X_train, y_rev_train,
+        cv=cv_reg, scoring="neg_mean_absolute_error",
+    )
+    reg_models[name] = pipe
+    mae_cv = -best_score
     preds = pipe.predict(X_test)
     mae_test = mean_absolute_error(y_rev_test, preds)
     r2_test  = r2_score(y_rev_test, preds)
-    reg_results[name] = {"mae_cv": mae_cv, "mae_test": mae_test, "r2": r2_test, "preds": preds}
+    reg_results[name] = {"mae_cv": mae_cv, "mae_test": mae_test, "r2": r2_test, "preds": preds, "best_params": best_params}
     print(f"[{name}]  CV MAE={mae_cv:,.0f}€  |  Test MAE={mae_test:,.0f}€  |  R²={r2_test:.4f}")
 
 best_reg_name = min(reg_results, key=lambda n: reg_results[n]["mae_test"])
 best_reg_pipe = reg_models[best_reg_name]
 print(f"\n★ Melhor: {best_reg_name}  (MAE={reg_results[best_reg_name]['mae_test']:,.0f}€, R²={reg_results[best_reg_name]['r2']:.4f})")
 
-# Plot: previsão vs real (melhor modelo) 
+# Plot: previsão vs real (melhor modelo)
 
 fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -197,9 +247,32 @@ y_dish_train_enc = le.fit_transform(y_dish_train)
 y_dish_test_enc  = le.transform(y_dish_test)
 
 clf_models = {
-    "Logistic Regression": Pipeline([("pre", preprocessor), ("m", LogisticRegression(max_iter=1000, random_state=42, class_weight="balanced"))]),
-    "Random Forest":       Pipeline([("pre", preprocessor), ("m", RandomForestClassifier(n_estimators=200, random_state=42, class_weight="balanced", n_jobs=-1))]),
-    "XGBoost":             Pipeline([("pre", preprocessor), ("m", XGBClassifier(n_estimators=300, learning_rate=0.05, max_depth=5, random_state=42, verbosity=0, eval_metric="mlogloss"))]),
+    "Logistic Regression": Pipeline([("pre", preprocessor), ("m", LogisticRegression(max_iter=1000, random_state=RANDOM_STATE))]),
+    "Random Forest":       Pipeline([("pre", preprocessor), ("m", RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1))]),
+    "XGBoost":             Pipeline([("pre", preprocessor), ("m", XGBClassifier(random_state=RANDOM_STATE, verbosity=0, eval_metric="mlogloss", n_jobs=-1))]),
+}
+
+clf_param_grids = {
+    "Logistic Regression": {
+        "m__C": [0.1, 0.3, 1.0, 3.0, 10.0],
+        "m__class_weight": [None, "balanced"],
+    },
+    "Random Forest": {
+        "m__n_estimators": [150, 250, 400],
+        "m__max_depth": [None, 8, 12, 18],
+        "m__min_samples_split": [2, 5, 10],
+        "m__min_samples_leaf": [1, 2, 4],
+        "m__max_features": ["sqrt", 0.7, 1.0],
+        "m__class_weight": [None, "balanced"],
+    },
+    "XGBoost": {
+        "m__n_estimators": [150, 300, 500],
+        "m__learning_rate": [0.03, 0.05, 0.08, 0.1],
+        "m__max_depth": [3, 4, 5, 6],
+        "m__subsample": [0.75, 0.9, 1.0],
+        "m__colsample_bytree": [0.75, 0.9, 1.0],
+        "m__reg_lambda": [1.0, 3.0, 5.0],
+    },
 }
 
 cv_clf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
@@ -212,8 +285,11 @@ for name, pipe in clf_models.items():
     else:
         y_tr, y_te = y_dish_train, y_dish_test
 
-    scores = cross_val_score(pipe, X_train, y_tr, cv=cv_clf, scoring="accuracy")
-    pipe.fit(X_train, y_tr)
+    pipe, best_score, best_params = tune_model(
+        name, pipe, clf_param_grids[name], X_train, y_tr,
+        cv=cv_clf, scoring="accuracy",
+    )
+    clf_models[name] = pipe
     raw_preds = pipe.predict(X_test)
     # Converter de volta para nomes se XGBoost
     if name == "XGBoost":
@@ -222,8 +298,8 @@ for name, pipe in clf_models.items():
         preds = raw_preds
     acc = accuracy_score(y_dish_test, preds)
     f1  = f1_score(y_dish_test, preds, average="weighted")
-    clf_results[name] = {"acc_cv": scores.mean(), "acc_test": acc, "f1": f1, "preds": preds, "le": le if name == "XGBoost" else None}
-    print(f"[{name}]  CV Acc={scores.mean():.4f}  |  Test Acc={acc:.4f}  |  F1={f1:.4f}")
+    clf_results[name] = {"acc_cv": best_score, "acc_test": acc, "f1": f1, "preds": preds, "le": le if name == "XGBoost" else None, "best_params": best_params}
+    print(f"[{name}]  CV Acc={best_score:.4f}  |  Test Acc={acc:.4f}  |  F1={f1:.4f}")
 
 best_clf_name = max(clf_results, key=lambda n: clf_results[n]["acc_test"])
 best_clf_pipe = clf_models[best_clf_name]
@@ -231,7 +307,7 @@ print(f"\n★ Melhor: {best_clf_name}  (Acc={clf_results[best_clf_name]['acc_tes
 print("\nClassification Report:")
 print(classification_report(y_dish_test, clf_results[best_clf_name]["preds"]))
 
-# Plot: accuracy por modelo + importâncias 
+# Plot: accuracy por modelo + importâncias
 fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
 accs  = [clf_results[n]["acc_test"] for n in clf_models]
@@ -262,7 +338,7 @@ plt.savefig("plots/02_dish_model.png")
 plt.close()
 print("✓ plots/02_dish_model.png")
 
-# Plot: receita mensal agregada por restaurante 
+# Plot: receita mensal agregada por restaurante
 fig, ax = plt.subplots(figsize=(13, 5))
 top5 = df.groupby("restaurant_id")["revenue"].sum().nlargest(5).index
 colors5 = ["#2A9D8F", "#E76F51", "#264653", "#E9C46A", "#A8DADC"]
@@ -283,7 +359,8 @@ print("✓ plots/03_revenue_evolution.png")
 # Guardar modelos
 with open("models/revenue_model.pkl", "wb") as f:
     pickle.dump({"name": best_reg_name, "pipeline": best_reg_pipe,
-                 "numeric": NUMERIC, "categorical": CATEGORICAL}, f)
+                 "numeric": NUMERIC, "categorical": CATEGORICAL,
+                 "best_params": reg_results[best_reg_name]["best_params"]}, f)
 
 with open("models/dish_model.pkl", "wb") as f:
     best_clf_info = clf_results[best_clf_name]
@@ -291,7 +368,8 @@ with open("models/dish_model.pkl", "wb") as f:
     pickle.dump({"name": best_clf_name, "pipeline": best_clf_pipe,
                  "numeric": NUMERIC, "categorical": CATEGORICAL,
                  "classes": classes,
-                 "label_encoder": best_clf_info["le"]}, f)
+                 "label_encoder": best_clf_info["le"],
+                 "best_params": best_clf_info["best_params"]}, f)
 
 print(f"\n✓ models/revenue_model.pkl  ({best_reg_name})")
 print(f"✓ models/dish_model.pkl     ({best_clf_name})")
