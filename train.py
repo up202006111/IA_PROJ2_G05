@@ -13,10 +13,12 @@ Estratégia: para cada restaurante, usar os meses anteriores como features
 import warnings
 warnings.filterwarnings("ignore")
 
+import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
+from pathlib import Path
 
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.linear_model import Ridge, LogisticRegression
@@ -58,6 +60,25 @@ def tune_model(name, pipe, param_grid, X_train, y_train, cv, scoring):
 
     print(f"[{name}] melhores hiperparâmetros: {search.best_params_}")
     return search.best_estimator_, search.best_score_, search.best_params_
+
+
+def dataframe_to_markdown(df, index_name="Algoritmo"):
+    table = df.reset_index().rename(columns={"index": index_name})
+    headers = list(table.columns)
+    rows = []
+    for _, row in table.iterrows():
+        values = []
+        for value in row:
+            if isinstance(value, float):
+                values.append(f"{value:.4f}")
+            else:
+                values.append(str(value))
+        rows.append(values)
+
+    header_line = "| " + " | ".join(headers) + " |"
+    separator_line = "| " + " | ".join(["---"] * len(headers)) + " |"
+    row_lines = ["| " + " | ".join(values) + " |" for values in rows]
+    return "\n".join([header_line, separator_line] + row_lines)
 
 # Carregar dados
 df = pd.read_csv("data/franchise_monthly.csv")
@@ -384,3 +405,82 @@ print("\n── Resumo Classificação ─────────────�
 clf_summary = pd.DataFrame({n: {"Accuracy": v["acc_test"], "F1": v["f1"]}
                              for n, v in clf_results.items()}).T.round(4)
 print(clf_summary.to_string())
+
+# Estudo empírico: guardar comparação dos algoritmos e resultados principais
+reports_dir = Path("reports")
+reports_dir.mkdir(exist_ok=True)
+
+empirical_rows = []
+for name, values in reg_results.items():
+    empirical_rows.append({
+        "task": "Regressão - Receita",
+        "algorithm": name,
+        "cv_metric": "MAE",
+        "cv_score": values["mae_cv"],
+        "test_metric_1": "MAE",
+        "test_score_1": values["mae_test"],
+        "test_metric_2": "R2",
+        "test_score_2": values["r2"],
+        "best_params": json.dumps(values["best_params"], ensure_ascii=False),
+    })
+
+for name, values in clf_results.items():
+    empirical_rows.append({
+        "task": "Classificação - Prato",
+        "algorithm": name,
+        "cv_metric": "Accuracy",
+        "cv_score": values["acc_cv"],
+        "test_metric_1": "Accuracy",
+        "test_score_1": values["acc_test"],
+        "test_metric_2": "F1",
+        "test_score_2": values["f1"],
+        "best_params": json.dumps(values["best_params"], ensure_ascii=False),
+    })
+
+empirical_df = pd.DataFrame(empirical_rows)
+empirical_df.to_csv(reports_dir / "empirical_results.csv", index=False)
+
+reg_table = reg_summary.rename(columns={"MAE (€)": "MAE teste (€)", "R²": "R² teste"})
+reg_table["CV MAE (€)"] = pd.Series({n: v["mae_cv"] for n, v in reg_results.items()})
+reg_table = reg_table[["CV MAE (€)", "MAE teste (€)", "R² teste"]].round(4)
+
+clf_table = clf_summary.rename(columns={"Accuracy": "Accuracy teste", "F1": "F1 teste"})
+clf_table["CV Accuracy"] = pd.Series({n: v["acc_cv"] for n, v in clf_results.items()})
+clf_table = clf_table[["CV Accuracy", "Accuracy teste", "F1 teste"]].round(4)
+
+best_reg_params = json.dumps(reg_results[best_reg_name]["best_params"], ensure_ascii=False)
+best_clf_params = json.dumps(clf_results[best_clf_name]["best_params"], ensure_ascii=False)
+
+report = f"""# Estudo Empirico
+
+Este estudo compara três algoritmos para cada tarefa usando validação cruzada no conjunto de treino e avaliação final num teste temporal composto pelos últimos 6 meses de 2024.
+
+## Tarefa 1 - Previsão de Receita
+
+Algoritmos avaliados: Ridge, Random Forest e XGBoost.
+
+{dataframe_to_markdown(reg_table)}
+
+Melhor algoritmo: **{best_reg_name}**
+
+Hiperparâmetros escolhidos: `{best_reg_params}`
+
+## Tarefa 2 - Previsão do Prato Mais Vendido
+
+Algoritmos avaliados: Logistic Regression, Random Forest e XGBoost.
+
+{dataframe_to_markdown(clf_table)}
+
+Melhor algoritmo: **{best_clf_name}**
+
+Hiperparâmetros escolhidos: `{best_clf_params}`
+
+## Conclusão
+
+Para regressão, o melhor resultado foi obtido por **{best_reg_name}**, com MAE de teste de {reg_results[best_reg_name]["mae_test"]:,.0f}€ e R² de {reg_results[best_reg_name]["r2"]:.4f}.
+Para classificação, o melhor resultado foi obtido por **{best_clf_name}**, com accuracy de teste de {clf_results[best_clf_name]["acc_test"]:.4f} e F1 ponderado de {clf_results[best_clf_name]["f1"]:.4f}.
+"""
+
+(reports_dir / "empirical_study.md").write_text(report, encoding="utf-8")
+print("\nreports/empirical_results.csv")
+print("reports/empirical_study.md")

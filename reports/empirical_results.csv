@@ -1,0 +1,7 @@
+task,algorithm,cv_metric,cv_score,test_metric_1,test_score_1,test_metric_2,test_score_2,best_params
+Regressão - Receita,Ridge,MAE,1584.4318272617904,MAE,2127.0157033655382,R2,0.4723733991659804,"{""m__alpha"": 0.1}"
+Regressão - Receita,Random Forest,MAE,1252.8719495626704,MAE,1729.1176340724628,R2,0.6425915933991159,"{""m__n_estimators"": 400, ""m__min_samples_split"": 5, ""m__min_samples_leaf"": 1, ""m__max_features"": 1.0, ""m__max_depth"": 18}"
+Regressão - Receita,XGBoost,MAE,901.6011667675166,MAE,1176.4941214554399,R2,0.8013314602940319,"{""m__subsample"": 0.9, ""m__reg_lambda"": 5.0, ""m__n_estimators"": 500, ""m__max_depth"": 3, ""m__learning_rate"": 0.08, ""m__colsample_bytree"": 0.9}"
+Classificação - Prato,Logistic Regression,Accuracy,0.5703958691910499,Accuracy,0.6666666666666666,F1,0.616671980401227,"{""m__class_weight"": null, ""m__C"": 0.1}"
+Classificação - Prato,Random Forest,Accuracy,0.6490246701090074,Accuracy,0.6296296296296297,F1,0.6043033509700175,"{""m__n_estimators"": 400, ""m__min_samples_split"": 5, ""m__min_samples_leaf"": 4, ""m__max_features"": 0.7, ""m__max_depth"": 8, ""m__class_weight"": null}"
+Classificação - Prato,XGBoost,Accuracy,0.6729776247848538,Accuracy,0.6481481481481481,F1,0.6244021799577355,"{""m__subsample"": 0.75, ""m__reg_lambda"": 3.0, ""m__n_estimators"": 150, ""m__max_depth"": 4, ""m__learning_rate"": 0.03, ""m__colsample_bytree"": 0.9}"

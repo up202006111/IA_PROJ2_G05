@@ -56,7 +56,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.markdown("---")
-    st.caption("BurgerPT Franchise · 18 restaurantes\nDados: Jan 2022 – Dez 2024")
+    st.caption("BurgerPT Franchise · 18 restaurantes\nDados: Jan 2022 - Dez 2024")
 
 # PÁGINA 1 — Dashboard Geral
 
@@ -70,7 +70,7 @@ if page == "Dashboard Geral":
     best_rest   = df.groupby("restaurant_name")["revenue"].sum().idxmax()
     best_dish_overall = df[[f"units_{d.replace(' ','_')}" for d in DISHES]].sum().idxmax().replace("units_","").replace("_"," ")
 
-    col1.metric("Receita Total (2022–2024)", f"{total_rev/1e6:.2f}M€")
+    col1.metric("Receita Total (2022-2024)", f"{total_rev/1e6:.2f}M€")
     col2.metric("Receita Mensal Média",      f"{avg_monthly:,.0f}€")
     col3.metric("Melhor Restaurante",         best_rest.replace("BurgerPT ", ""))
     col4.metric("Prato Mais Vendido",          best_dish_overall)
